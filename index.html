@@ -23,7 +23,7 @@ input,select,textarea{width:100%;padding:14px;border:1px solid var(--ln);border-
 label{display:block;font-size:14px;color:var(--mu);margin-top:8px}
 summary{padding:12px 0;font-weight:600;color:var(--ac)}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
-nav button{flex:1;border:0;background:none;color:var(--mu);padding:8px 0;font-size:11px}nav button.on{color:var(--ac);font-weight:700}nav span{display:block;font-size:21px}
+nav button{flex:1;border:0;background:none;color:var(--mu);padding:8px 0;font-size:10px}nav button.on{color:var(--ac);font-weight:700}nav span{display:block;font-size:21px}
 .fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:60px;height:60px;border-radius:50%;border:0;background:var(--pr);color:#fff;font-size:30px;box-shadow:0 4px 12px #0004;z-index:5}
 .ov{position:fixed;inset:0;background:#0008;display:flex;align-items:flex-end;z-index:9}
 .sh{background:var(--bg);width:100%;max-height:92%;overflow:auto;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px))}
@@ -54,6 +54,7 @@ main{animation:f .25s}@keyframes f{from{opacity:0;transform:translateY(6px)}}
 <button data-v="rec" onclick="go('rec')"><span>📋</span>Registros</button>
 <button data-v="bq" onclick="go('bq')"><span>📖</span>Bosquejos</button>
 <button data-v="cal" onclick="go('cal')"><span>📅</span>Calendario</button>
+<button data-v="ia" onclick="go('ia')"><span>✨</span>Asistente</button>
 <button data-v="set" onclick="go('set')"><span>⚙️</span>Ajustes</button>
 </nav>
 <div id="ts"></div>
@@ -94,7 +95,7 @@ function filt(){const f=st.f,q=norm(st.q),cnt={};D.forEach(x=>cnt[x.num]=(cnt[x.
  r.sort(f.o=='ant'?(a,b)=>a.date.localeCompare(b.date)||a.id-b.id:f.o=='mas'?(a,b)=>cnt[b.num]-cnt[a.num]||byDate(a,b):f.o=='men'?(a,b)=>cnt[a.num]-cnt[b.num]||byDate(a,b):byDate);return r}
 
 /* ---------- Interfaz ---------- */
-const card=x=>`<div class="c"><div class="r"><b class="n" onclick="hist(${x.num})">#${x.num}</b><div class="g" onclick="openForm(${x.id})"><div class="t">${esc(x.title)}</div><div class="m">${wd(x.date)} ${fd(x.date)} · ${esc(x.cong)}${x.sp?' · '+esc(x.sp):''}</div></div></div></div>`;
+const card=x=>`<div class="c"><div class="r"><b class="n" onclick="hist(${x.num})">#${x.num}</b><div class="g" onclick="openForm(${x.id})"><div class="t">${esc(x.title)}</div><div class="m">${wd(x.date)} ${fd(x.date)} · ${esc(x.cong)}${x.sp?' · '+esc(x.sp):''}${sg(x)}</div></div></div></div>`;
 const VIEWS={
 home:()=>{const rc=[...D].sort(byDate).slice(0,8);
  return`<div class="st"><div class="c"><b>${D.length}</b>Registros</div><div class="c"><b>${new Set(D.map(x=>x.num)).size}</b>Bosquejos distintos</div><div class="c"><b>${D.filter(x=>x.date.startsWith(String(new Date().getFullYear()))).length}</b>Este año</div><div class="c"><b>${cs('cong').length}</b>Congregaciones</div></div>
@@ -125,6 +126,14 @@ cal:()=>{const y=st.cm.getFullYear(),m=st.cm.getMonth(),first=(new Date(y,m,1).g
  return`<div class="mh"><button onclick="mv(-1)">‹</button><b style="font-size:18px">${MES[m][0].toUpperCase()+MES[m].slice(1)} ${y}</b><button onclick="mv(1)">›</button></div>
  <button class="b s" style="padding:10px;font-size:14px;margin:4px 0 10px" onclick="st.cm=new Date();st.cd=today();render()">Ir a hoy</button><div class="cal">${['L','M','X','J','V','S','D'].map(d=>`<small>${d}</small>`).join('')}${cells}</div>
  ${st.cd?`<h3>${fd(st.cd)}</h3>${sel.map(card).join('')||'<p class="m">Sin registros en esta fecha.</p>'}<button class="b" onclick="openForm(0,'${st.cd}')">＋ Agregar en esta fecha</button>`:'<p class="m">Toca una fecha para ver sus discursos.</p>'}`},
+ia:()=>`<h3 style="margin-top:0">✨ Asistente</h3><p class="m">Pregunta en lenguaje sencillo. Funciona sin Internet y no usa IA externa.</p>
+ <input id="aq" type="search" placeholder="Ej: ¿cuándo fue el último 23?" onkeydown="if(event.key=='Enter')asist()">
+ <button class="b" onclick="asist()">Preguntar</button><div id="ar"></div>
+ <p class="m">Prueba: «más presentados», «hace más tiempo», «bosquejo 23», «este año» o el nombre de una congregación.</p>
+ <h3>Sugerir discursos</h3><label>No presentados en los últimos…</label>
+ <select id="sm"><option value="6">6 meses</option><option value="12" selected>12 meses</option><option value="24">24 meses</option></select>
+ <label>Evitar los que ya dio esta congregación (opcional)</label><select id="sc"><option value="">Ninguna</option>${cs('cong').map(c=>`<option>${esc(c)}</option>`).join('')}</select>
+ <button class="b s" onclick="sugg()">Sugerir</button><div id="sr"></div>${yrs()}`,
 set:()=>`<h3>Copia de seguridad</h3><p class="m">Última copia: ${BK?fd(new Date(BK).toISOString().slice(0,10)):'ninguna'}</p>
  <button class="b" onclick="exp()">⬇ Exportar copia (archivo)</button>
  <button class="b s" onclick="cp()">Copiar copia al portapapeles</button>
@@ -150,8 +159,25 @@ let IP=null;addEventListener('beforeinstallprompt',e=>{e.preventDefault();IP=e})
 function inst(){if(IP){IP.prompt();IP=null}else toast('Usa el menú ⋮ de Chrome → Instalar aplicación')}
 function shareH(n){const g=groups().get(n);if(!g)return;const t=['Bosquejo #'+n+' – '+g.title,'Presentado '+g.count+(g.count>1?' veces':' vez')+'. Última: '+fd(g.last)+' ('+ago(g.last)+')',...g.items.sort(byDate).map(x=>'• '+fd(x.date)+' – '+x.cong+(x.sp?' – '+x.sp:''))].join(String.fromCharCode(10));if(navigator.share)navigator.share({text:t}).catch(()=>{});else navigator.clipboard.writeText(t).then(()=>toast('Historial copiado'),()=>toast('No se pudo copiar'))}
 function topC(){const m={};D.forEach(x=>m[x.cong]=(m[x.cong]||0)+1);const a=Object.entries(m).sort((x,y)=>y[1]-x[1]).slice(0,3);return a.length<2?'':'<h3>Congregaciones frecuentes</h3><div class="c">'+a.map(([c,n])=>`<div class="r" style="justify-content:space-between;padding:4px 0"><span>${esc(c)}</span><b>${n}</b></div>`).join('')+'</div>'}
-function csv(){const q=v=>'"'+String(v||'').replace(/"/g,'""')+'"',L=['Bosquejo,Título,Fecha,Congregación,Discursante',...[...D].sort(byDate).map(x=>[x.num,q(x.title),x.date,q(x.cong),q(x.sp)].join(','))].join(String.fromCharCode(13,10));const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([String.fromCharCode(65279)+L],{type:'text/csv'}));a.download='discursos-'+today()+'.csv';document.body.appendChild(a);a.click();a.remove();toast('Archivo CSV generado')}
+function csv(){const q=v=>'"'+String(v||'').replace(/"/g,'""')+'"',L=['Bosquejo,Título,Fecha,Congregación,Discursante,Canción',...[...D].sort(byDate).map(x=>[x.num,q(x.title),x.date,q(x.cong),q(x.sp),x.s1||''].join(','))].join(String.fromCharCode(13,10));const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([String.fromCharCode(65279)+L],{type:'text/csv'}));a.download='discursos-'+today()+'.csv';document.body.appendChild(a);a.click();a.remove();toast('Archivo CSV generado')}
 function wipe(){ask('¿Borrar TODOS los registros? Haz antes una copia de seguridad. No se puede deshacer.',async()=>{await tx('reg','readwrite',o=>o.clear());await load();closeSheet();render();toast('Datos borrados')},'Borrar todo')}
+const sg=x=>x.s1?' · ♪ '+x.s1:'';
+function asist(){const q=norm($('#aq').value),r=$('#ar'),G=groups();if(!q)return;
+ const L=g=>`<div class="c" onclick="hist(${g.num})"><b>#${g.num}</b> ${esc(g.title)}<div class="m">${g.count} ${g.count>1?'veces':'vez'} · última ${fd(g.last)} (${ago(g.last)})</div></div>`;
+ const top=(a,n)=>a.slice(0,n).map(L).join('')||'<p class="m">Sin datos.</p>',A=[...G.values()],num=(q.match(/\d+/)||[])[0];let h='';
+ if(/mas (veces|presentad)|repetid|frecuente/.test(q))h=top(A.sort((x,y)=>y.count-x.count),5);
+ else if(/menos (veces|presentad)/.test(q))h=top(A.sort((x,y)=>x.count-y.count||x.last.localeCompare(y.last)),5);
+ else if(/hace (tiempo|mucho)|mas tiempo|sin presentar|olvidad/.test(q))h=top(A.sort((x,y)=>x.last.localeCompare(y.last)),5);
+ else if(num&&G.get(+num)){const g=G.get(+num);h=L(g)+g.items.sort(byDate).slice(0,5).map(x=>`<div class="m">• ${fd(x.date)} · ${esc(x.cong)}${x.sp?' · '+esc(x.sp):''}</div>`).join('')}
+ else if(num)h='<p class="m">El bosquejo '+num+' aún no está registrado.</p>';
+ else if(/este ano/.test(q)){const y=String(new Date().getFullYear());h='<p>Este año llevas <b>'+D.filter(x=>x.date.startsWith(y)).length+'</b> discursos registrados.</p>'}
+ else{const c=cs('cong').find(c=>q.includes(norm(c)));if(c){const a=D.filter(x=>x.cong===c).sort(byDate);h='<p><b>'+esc(c)+'</b>: '+a.length+' discursos.</p>'+a.slice(0,5).map(card).join('')}
+  else{const a=D.filter(x=>norm(x.title+' '+x.cong+' '+x.sp).includes(q)).sort(byDate);h=a.length?'<p class="m">Coincidencias:</p>'+a.slice(0,5).map(card).join(''):'<p class="m">No encontré nada. Prueba con otra pregunta.</p>'}}
+ r.innerHTML=h}
+function sugg(){const m=+$('#sm').value,c=$('#sc').value,d=new Date();d.setMonth(d.getMonth()-m);const lim=d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()),used=new Set(c?D.filter(x=>x.cong===c).map(x=>x.num):[]);
+ const a=[...groups().values()].filter(g=>g.last<lim&&!used.has(g.num)).sort((x,y)=>x.last.localeCompare(y.last)).slice(0,10);
+ $('#sr').innerHTML=(a.length?`<p class="m">${a.length} sugerencias (las que más tiempo llevan sin darse):</p>`:'<p class="m">No hay bosquejos que cumplan. Prueba con menos meses.</p>')+a.map(g=>`<div class="c" onclick="hist(${g.num})"><div class="r"><b class="n">#${g.num}</b><div class="g"><div class="t">${esc(g.title)}</div><div class="m">${ago(g.last)} · ${g.count} ${g.count>1?'veces':'vez'}</div></div></div></div>`).join('')}
+function yrs(){const m={};D.forEach(x=>{const y=x.date.slice(0,4);m[y]=(m[y]||0)+1});const e=Object.entries(m).sort((a,b)=>b[0]-a[0]),mx=Math.max(1,...e.map(x=>x[1]));return e.length?'<h3>Discursos por año</h3><div class="c">'+e.map(([y,n])=>`<div class="r" style="padding:3px 0"><span style="width:44px">${y}</span><div style="flex:1;background:var(--ln);border-radius:6px"><div style="width:${n/mx*100}%;background:var(--ac);height:14px;border-radius:6px"></div></div><b style="width:32px;text-align:right">${n}</b></div>`).join('')+'</div>':''}
 let BK=null;
 function markBk(){BK=Date.now();meta('bk',BK)}
 function sug(){const a=[...groups().values()].sort((x,y)=>x.last.localeCompare(y.last)).slice(0,3);return a.length<3?'':'<h3>Más tiempo sin presentarse</h3>'+a.map(g=>`<div class="c" onclick="hist(${g.num})"><div class="r"><b class="n">#${g.num}</b><div class="g"><div class="t">${esc(g.title)}</div><div class="m">${ago(g.last)} · ${g.count} ${g.count>1?'veces':'vez'}</div></div></div></div>`).join('')}
@@ -164,7 +190,7 @@ function hist(n){const g=groups().get(n);if(!g)return;
  sheet(`<h2>#${n} · ${esc(g.title)}</h2>
  <div class="st"><div class="c"><b>${g.count}</b>veces presentado</div><div class="c"><b style="font-size:20px">${fd(g.last)}</b>última presentación</div></div>
  <p>Tiempo transcurrido: <b>${ago(g.last)}</b></p><h3>Historial completo</h3>
- ${g.items.sort(byDate).map(x=>`<div class="c" onclick="openForm(${x.id})"><div class="t">${fd(x.date)}</div><div class="m">${esc(x.cong)}${x.sp?' · '+esc(x.sp):''}</div></div>`).join('')}
+ ${g.items.sort(byDate).map(x=>`<div class="c" onclick="openForm(${x.id})"><div class="t">${fd(x.date)}</div><div class="m">${esc(x.cong)}${x.sp?' · '+esc(x.sp):''}${sg(x)}</div></div>`).join('')}
  <button class="b" onclick="openForm(0,0,${n})">＋ Registrar otra presentación</button><button class="b s" onclick="shareH(${n})">Compartir historial</button><button class="b s" onclick="closeSheet()">Cerrar</button>`)}
 function openForm(id,date,num){const x=id?D.find(r=>r.id===id):{date:date||st.ld||today(),num:num||'',title:num?groups().get(num).title:''};if(!x)return;
  sheet(`<h2>${id?'Editar':'Nuevo'} registro</h2>
@@ -173,6 +199,7 @@ function openForm(id,date,num){const x=id?D.find(r=>r.id===id):{date:date||st.ld
  <label>Fecha de presentación</label><input id="i3" type="date" value="${x.date}"><div style="display:flex;gap:8px"><button class="b s" style="flex:1;width:auto;margin:2px 0;padding:10px;font-size:14px" onclick="qd('h')">Hoy</button><button class="b s" style="flex:1;width:auto;margin:2px 0;padding:10px;font-size:14px" onclick="qd(6)">Próx. sábado</button><button class="b s" style="flex:1;width:auto;margin:2px 0;padding:10px;font-size:14px" onclick="qd(0)">Próx. domingo</button></div>
  <label>Congregación de procedencia</label><input id="i4" list="lc" value="${esc(x.cong||'')}">
  <label>Hermano discursante (opcional)</label><input id="i5" list="ls" value="${esc(x.sp||'')}">
+ <label>Canción (Nº)</label><input id="i6" type="number" inputmode="numeric" min="1" value="${x.s1||''}">
  <datalist id="lc">${uniq('cong')}</datalist><datalist id="ls">${uniq('sp')}</datalist>
  <button class="b" onclick="save(${id||0},0)">Guardar</button>
  ${id?`<button class="b d" onclick="del(${id})">Eliminar</button>`:'<button class="b s" onclick="save(0,1)">Guardar y agregar otro (misma fecha)</button>'}
@@ -180,10 +207,10 @@ function openForm(id,date,num){const x=id?D.find(r=>r.id===id):{date:date||st.ld
  const t=$('#i2');t.oninput=()=>delete t.dataset.a;
  const hn=()=>{const g=groups().get(+$('#i1').value);const h=$('#hn'),rp=g&&g.last>=lastYear();h.textContent=g?(rp?'⚠ ':'')+'Ya presentado '+g.count+(g.count>1?' veces':' vez')+' · última: '+fd(g.last)+' ('+ago(g.last)+')'+(rp?' — hace menos de un año':''):'';h.style.color=rp?'#d9483b':''};hn();
  $('#i1').oninput=e=>{hn();const g=groups().get(+e.target.value);if(g&&(!t.value||t.dataset.a)){t.value=g.title;t.dataset.a=1}}}
-async function save(id,more){const n=+$('#i1').value,t=$('#i2').value.trim(),d=$('#i3').value,c=$('#i4').value.trim(),s=$('#i5').value.trim();
+async function save(id,more){const n=+$('#i1').value,t=$('#i2').value.trim(),d=$('#i3').value,c=$('#i4').value.trim(),s=$('#i5').value.trim(),s1=+$('#i6').value||0;
  if(!(n>0)||!t||!d||!c)return toast('Completa número, título, fecha y congregación');
  if(!id&&D.some(x=>x.num===n&&x.date===d&&x.cong===c))return toast('Ya existe ese registro');
- const r={num:n,title:t,date:d,cong:c,sp:s};if(id)r.id=id;
+ const r={num:n,title:t,date:d,cong:c,sp:s,s1};if(id)r.id=id;
  try{await tx('reg','readwrite',o=>o.put(r));await load()}catch(e){return toast('No se pudo guardar')}
  st.ld=d;toast('Registro guardado');if(more){openForm(0,d)}else{closeSheet()}render()}
 function del(id){ask('¿Eliminar este registro? No se puede deshacer.',async()=>{await tx('reg','readwrite',o=>o.delete(id));await load();closeSheet();render();toast('Registro eliminado')})}
@@ -199,7 +226,7 @@ function impUI(){sheet(`<h2>Importar copia</h2><p class="m">Los registros nuevos
 async function imp(txt){let o;try{o=JSON.parse(txt)}catch(e){return toast('Copia no válida')}
  const a=Array.isArray(o)?o:o.reg;if(!Array.isArray(a))return toast('Copia no válida');
  const k=r=>[r.num,r.date,r.cong,r.sp||''].join('|'),have=new Set(D.map(k));let n=0;
- const rows=a.filter(r=>r&&+r.num>0&&r.title&&/^\d{4}-\d\d-\d\d$/.test(r.date)&&r.cong).map(r=>({num:+r.num,title:String(r.title),date:r.date,cong:String(r.cong),sp:String(r.sp||'')})).filter(r=>{if(have.has(k(r)))return false;have.add(k(r));return true});
+ const rows=a.filter(r=>r&&+r.num>0&&r.title&&/^\d{4}-\d\d-\d\d$/.test(r.date)&&r.cong).map(r=>({num:+r.num,title:String(r.title),date:r.date,cong:String(r.cong),sp:String(r.sp||''),s1:+r.s1||0})).filter(r=>{if(have.has(k(r)))return false;have.add(k(r));return true});
  await tx('reg','readwrite',s=>{rows.forEach(r=>{s.add(r);n++})});await load();closeSheet();render();toast(n+' registros importados')}
 
 /* ---------- PIN ---------- */
