@@ -1,0 +1,141 @@
+name: Crear APK
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Crear proyecto Android
+        run: |
+          P=android/app/src/main
+          mkdir -p $P/assets $P/java/com/agendadiscursos/app $P/res/mipmap-xxhdpi
+          cp index.html manifest.json sw.js icon-192.png icon-512.png $P/assets/
+          cp icon-512.png $P/res/mipmap-xxhdpi/ic_launcher.png
+          cat > android/settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositories { google(); mavenCentral() } }
+          rootProject.name = "AgendaDiscursos"
+          include ':app'
+          EOF
+          cat > android/build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.5.2' apply false }
+          EOF
+          cat > android/gradle.properties <<'EOF'
+          android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx2g
+          EOF
+          cat > android/app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+            namespace 'com.agendadiscursos.app'
+            compileSdk 34
+            defaultConfig {
+              applicationId "com.agendadiscursos.app"
+              minSdk 29
+              targetSdk 34
+              versionCode 1
+              versionName "1.0"
+            }
+            compileOptions {
+              sourceCompatibility JavaVersion.VERSION_17
+              targetCompatibility JavaVersion.VERSION_17
+            }
+          }
+          dependencies { implementation 'androidx.webkit:webkit:1.11.0' }
+          EOF
+          cat > $P/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application android:label="Agenda de Discursos" android:icon="@mipmap/ic_launcher" android:allowBackup="true" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+              <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden">
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN"/>
+                  <category android:name="android.intent.category.LAUNCHER"/>
+                </intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          EOF
+          cat > $P/java/com/agendadiscursos/app/MainActivity.java <<'EOF'
+          package com.agendadiscursos.app;
+          import android.app.Activity;
+          import android.content.ContentValues;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.provider.MediaStore;
+          import android.webkit.*;
+          import android.widget.Toast;
+          import androidx.webkit.WebViewAssetLoader;
+          import java.io.OutputStream;
+          public class MainActivity extends Activity {
+            WebView w;
+            ValueCallback<Uri[]> cb;
+            @Override protected void onCreate(Bundle b) {
+              super.onCreate(b);
+              w = new WebView(this);
+              setContentView(w);
+              WebSettings s = w.getSettings();
+              s.setJavaScriptEnabled(true);
+              s.setDomStorageEnabled(true);
+              s.setDatabaseEnabled(true);
+              final WebViewAssetLoader l = new WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this)).build();
+              w.setWebViewClient(new WebViewClient() {
+                @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                  return l.shouldInterceptRequest(r.getUrl());
+                }
+              });
+              w.setWebChromeClient(new WebChromeClient() {
+                @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> c, FileChooserParams p) {
+                  cb = c;
+                  try { startActivityForResult(p.createIntent(), 1); }
+                  catch (Exception e) { cb = null; return false; }
+                  return true;
+                }
+              });
+              w.addJavascriptInterface(this, "AB");
+              w.loadUrl("https://appassets.androidplatform.net/assets/index.html");
+            }
+            @Override protected void onActivityResult(int q, int r, Intent d) {
+              if (q == 1 && cb != null) {
+                cb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(r, d));
+                cb = null;
+              }
+            }
+            @Override public void onBackPressed() { moveTaskToBack(true); }
+            @JavascriptInterface public void save(final String name, final String text) {
+              try {
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.Downloads.DISPLAY_NAME, name);
+                v.put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream");
+                Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                OutputStream o = getContentResolver().openOutputStream(u);
+                o.write(text.getBytes("UTF-8"));
+                o.close();
+              } catch (final Exception e) {
+                runOnUiThread(new Runnable() { public void run() {
+                  Toast.makeText(MainActivity.this, "No se pudo guardar", Toast.LENGTH_LONG).show();
+                }});
+              }
+            }
+          }
+          EOF
+      - name: Compilar
+        working-directory: android
+        run: gradle assembleDebug --no-daemon
+      - name: Publicar APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk AgendaDiscursos.apk
+          gh release create apk-${{ github.run_number }} AgendaDiscursos.apk --title "Agenda de Discursos (APK)" --notes "APK listo para instalar"
